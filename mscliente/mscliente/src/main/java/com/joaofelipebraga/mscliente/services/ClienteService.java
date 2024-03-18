@@ -1,0 +1,108 @@
+package com.joaofelipebraga.mscliente.services;
+
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.joaofelipebraga.mscliente.dtos.ClienteAtualizarDTO;
+import com.joaofelipebraga.mscliente.dtos.ClienteCriarDTO;
+import com.joaofelipebraga.mscliente.dtos.ClienteDTO;
+import com.joaofelipebraga.mscliente.entities.Cliente;
+import com.joaofelipebraga.mscliente.entities.Endereco;
+import com.joaofelipebraga.mscliente.repositories.ClienteRepository;
+import com.joaofelipebraga.mscliente.services.exceptions.CepInvalidException;
+import com.joaofelipebraga.mscliente.services.exceptions.DatabaseException;
+import com.joaofelipebraga.mscliente.services.exceptions.ResourceNotFoundException;
+
+import feign.FeignException;
+import jakarta.persistence.EntityNotFoundException;
+
+@Service
+public class ClienteService {
+
+	@Autowired
+	ClienteRepository clienteRepository;
+
+	@Autowired
+	EnderecoService enderecoService;
+
+	@Transactional(readOnly = true)
+	public Page<ClienteDTO> findAllPaged(Pageable pageable) {
+		Page<Cliente> list = clienteRepository.findAll(pageable);
+		return list.map(x -> new ClienteDTO(x));
+	}
+
+	public ClienteDTO findById(Long id) {
+		Optional<Cliente> obj = clienteRepository.findById(id);
+		Cliente entity = obj.orElseThrow(() -> new ResourceNotFoundException("Entidade não achada"));
+		return new ClienteDTO(entity);
+	}
+
+	@Transactional
+	public ClienteDTO insert(ClienteCriarDTO dto) {
+		Cliente entity = new Cliente();
+		entity.setSenha(dto.getSenha());
+		entity.setCpf(dto.getCpf());
+		integrarApiViaCep(dto, entity);
+		copyDtoToEntity(dto, entity);
+
+		entity = clienteRepository.save(entity);
+
+		return new ClienteDTO(entity);
+
+	}
+
+	@Transactional
+	public ClienteDTO update(Long id, ClienteAtualizarDTO dto) {
+		try {
+			Cliente entity = clienteRepository.getReferenceById(id);
+			integrarApiViaCep(dto, entity);
+			entity.setSenha(dto.getSenha());
+			entity.setCpf(dto.getCpf());
+			copyDtoToEntity(dto, entity);
+			entity = clienteRepository.save(entity);
+			return new ClienteDTO(entity);
+		} catch (EntityNotFoundException e) {
+			throw new ResourceNotFoundException("Id not found " + id);
+		}
+	}
+
+	public void delete(Long id) {
+		try {
+			clienteRepository.deleteById(id);
+		} catch (EmptyResultDataAccessException e) {
+			throw new ResourceNotFoundException("Id not found " + id);
+		} catch (DataIntegrityViolationException e) {
+			throw new DatabaseException("Cliente não pode ser excluido, pois está vinculado a uma CONTA");
+		}
+	}
+
+	private void copyDtoToEntity(ClienteDTO dto, Cliente entity) {
+		entity.setNome(dto.getNome());
+		entity.setCategoria(dto.getCategoria());
+		entity.setEmail(dto.getEmail());
+		entity.getEndereco().setRua(dto.getEndereco().getRua());
+		entity.getEndereco().setNumero(dto.getEndereco().getNumero());
+		entity.getEndereco().setBairro(dto.getEndereco().getBairro());
+		entity.getEndereco().setComplemento(dto.getEndereco().getComplemento());
+
+	}
+
+	private Endereco integrarApiViaCep(ClienteDTO dto, Cliente entity) {
+		try {
+			Endereco endereco = enderecoService.executa(dto.getEndereco().getCep());
+			entity.setEndereco(endereco);
+			return endereco;
+		} catch (FeignException e) {
+			throw new CepInvalidException("Cep not found! " + dto.getEndereco().getCep());
+		}
+
+	}
+
+}

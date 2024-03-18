@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: eurekaserver
+
+server:
+  port: 8761
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+
+
+
+#eureka.client.register-with-eureka: false: Esta configura��o
+ # desativa o registro autom�tico da aplica��o no servidor Eureka.
+    #Quando definido como "false", indica que esta aplica��o n�o deseja
+       #se registrar no servidor Eureka.
+
+#eureka.client.fetch-register: false: Esta configura��o desativa a busca por
+ # inst�ncias de servi�os no servidor Eureka.
+  #Quando definido como "false", indica que esta aplica��o
+  #n�o deseja buscar ou descobrir outros servi�os registrados no servidor Eureka.
+
